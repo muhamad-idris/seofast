@@ -376,7 +376,7 @@ if __name__ == "__main__":
 
     threads = []
     for i in range(1, num_devices + 1):
-        t = threading.Thread(target=worker, args=(main_email, main_password, i, random.choice(proxy)))
+        t = threading.Thread(target=worker, args=(main_email, main_password, i, proxy.pop()))
         t.daemon = True
         threads.append(t)
         t.start()
