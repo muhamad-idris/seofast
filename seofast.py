@@ -210,8 +210,10 @@ class SeoFastBot:
                     return data
                 else:
                     self.log(f"[!] Tidak ada tugas tersedia atau error: {res.text}")
+                    return "RESTART"
             else:
                 self.log(f"[-] Gagal ambil tugas ({res.status_code}): {res.text}")
+                return "RESTART"
         except Exception as e:
             self.log(f"[-] Error get_task: {e}")
         return None
@@ -286,14 +288,17 @@ class SeoFastBot:
         self.log("="*40)
         
         if not self.login():
-            return
+            return "RESTART"
             
         # Kirim update data sekali di awal
         self.update_data()
         
         while True:
             task = self.get_task()
-            if task:
+            if task == "RESTART":
+                self.log("[*] Tidak ada tugas, meregenerasi device dan mengganti proxy...")
+                return "RESTART"
+            elif task:
                 id_status = task.get("id_status")
                 timer = int(task.get("timer", 15))
                 url = task.get("url")
@@ -309,9 +314,19 @@ class SeoFastBot:
                 self.log("[*] Menunggu 30 detik sebelum mencoba lagi...")
                 time.sleep(30)
 
-def worker(email, password, device_index, proxy):
-    bot = SeoFastBot(email, password, device_index, proxy)
-    bot.run()
+def worker(email, password, device_index, proxy_list):
+    while True:
+        current_proxy = random.choice(proxy_list) if proxy_list else None
+        if current_proxy and not current_proxy.startswith("http"):
+            current_proxy = f"http://{current_proxy}"
+            
+        bot = SeoFastBot(email, password, device_index, current_proxy)
+        res = bot.run()
+        
+        if res == "RESTART":
+            time.sleep(2)
+            continue
+        break
 
 if __name__ == "__main__":
     os.system('clear' if os.name == 'posix' else 'cls')
@@ -343,11 +358,16 @@ if __name__ == "__main__":
     
     main_email = ""
     main_password = ""
-    proxy = []
-    if os.path.exists(os.path.join(acc_path,"proxies.txt")):
-        with open(os.path.join(acc_path,"proxies.txt"),'r') as p:
+    proxy_list = []
+    
+    proxy_file = os.path.join(acc_path, "proxies.txt")
+    if os.path.exists(proxy_file):
+        with open(proxy_file, 'r') as p:
             for line in p:
-                proxy.append(line)
+                px = line.strip()
+                if px:
+                    proxy_list.append(px)
+                    
     if os.path.exists(acc_file):
         with open(acc_file, "r") as f:
             for line in f:
@@ -361,12 +381,7 @@ if __name__ == "__main__":
         sys.exit(1)
         
     print(f"[+] Login sebagai: {main_email}")
-    if proxy:
-        if not proxy[0].startswith("http"):
-            proxy = f"http://{proxy}"
-        print(f"[+] Proxy: {proxy}")
-    else:
-        print("[-] Proxy tidak ditemukan, menggunakan koneksi langsung.")
+    print(f"[+] Ditemukan {len(proxy_list)} proxy.")
         
     try:
         num_devices = int(input("[?] Jumlah Device (Thread): ").strip())
@@ -376,7 +391,7 @@ if __name__ == "__main__":
 
     threads = []
     for i in range(1, num_devices + 1):
-        t = threading.Thread(target=worker, args=(main_email, main_password, i, proxy.pop()))
+        t = threading.Thread(target=worker, args=(main_email, main_password, i, proxy_list))
         t.daemon = True
         threads.append(t)
         t.start()
