@@ -27,6 +27,8 @@ RUSSIAN_NAMES = [
     "morozov", "petrov", "volkov", "solovyov", "vasilyev", "zaytsev", "pavlov", "semenov"
 ]
 
+from devices import DEVICE_PROFILES
+
 def generate_russian_email():
     name = random.choice(RUSSIAN_NAMES)
     suffix = random.choice(["", str(random.randint(70, 99)), str(random.randint(1980, 2005)), str(random.randint(1, 999))])
@@ -57,16 +59,26 @@ class SeoFastBot:
         self.email = email
         self.password = password
         self.device_index = device_index
+        
+        # Patenkan data unik berdasarkan email akun dan index device
+        seed_string = f"{self.email}_{self.device_index}"
+        random.seed(seed_string)
+        
         self.gmail = generate_russian_email()
+        username = self.gmail.split('@')[0]
+        self.masked_gmail = f"{username[0]}***{username[-1]}@gmail.com"
+        
+        self.profile = DEVICE_PROFILES[(self.device_index - 1) % len(DEVICE_PROFILES)]
+        self.id_device = "secure_" + hashlib.md5(seed_string.encode()).hexdigest()[:16]
+        
+        random.seed() # reset seed
+        
         self.session = requests.Session()
         self.session.verify = False
         if proxy:
             self.session.proxies = {"http": proxy, "https": proxy}
             
         self.base_url = "https://seo-fast.bz/webapp/ajax/ajax_views.php"
-        
-        # Tambahkan random.random() agar beda tiap thread walau dipanggil bersamaan
-        self.id_device = "secure_" + hashlib.md5((str(time.time()) + str(random.random())).encode()).hexdigest()[:16]
         self.hash_ajax = None
         
         # Hitung App Token secara dinamis
@@ -76,8 +88,8 @@ class SeoFastBot:
         self.app_token = hashlib.sha256(string_to_hash.encode()).hexdigest()
         
         self.headers = {
-            'User-Agent': "Mozilla/5.0 (Linux; Android 13; WayDroid x86_64 Device Build/TQ3A.230901.001; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/111.0.5563.116 Safari/537.36 SeoFast-App/1.0",
-            'Accept': "text/javascript, application/javascript, application/ecmascript, application/x-ecmascript, */*; q=0.01",
+            'User-Agent': self.profile["user_agent"],
+            'Accept': "application/json, text/plain, */*",
             'X-Requested-With': "XMLHttpRequest",
             'X-App-Version': "1.1.0",
             'X-App-Token': self.app_token,
@@ -85,7 +97,7 @@ class SeoFastBot:
             'Content-Type': "application/x-www-form-urlencoded; charset=UTF-8",
             'Origin': "https://seo-fast.bz",
             'Referer': "https://seo-fast.bz/webapp/?pg=login",
-            'Accept-Language': "en-US,en;q=0.9",
+            'Accept-Language': "ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7",
             'Sec-Fetch-Site': "same-origin",
             'Sec-Fetch-Mode': "cors",
             'Sec-Fetch-Dest': "empty"
@@ -97,28 +109,13 @@ class SeoFastBot:
             "device_type": "secure_device",
             "is_emulator": False,
             "is_secure": True,
-            "emulator_type": "",
-            "emulator_details": {
-                "build_properties": False, "hardware": False, "files": False, "memu": False,
-                "bluestacks": False, "nox": False, "genymotion": False, "google_emulator": False,
-                "masking_detected": True
-            },
-            "google_email": self.gmail,
-            "hardware": {
-                "brand": "waydroid", "model": "WayDroid x86_64 Device", "device": "waydroid_x86_64",
-                "hardware": "unknown", "manufacturer": "Waydroid", "product": "lineage_waydroid_x86_64",
-                "board": "unknown"
-            },
-            "os": {"sdk_int": 33, "release": "13", "incremental": "eng.aleast.20260403.113748"},
-            "display": {"width_px": 1920, "height_px": 965, "density_dpi": 180, "density": 1.125},
-            "locale": {"language": "en", "country": "US", "variant": ""},
+            "google_email": self.masked_gmail,
+            "hardware": self.profile["hardware"],
+            "os": self.profile["os"],
+            "display": self.profile["display"],
+            "locale": {"language": "in", "country": "ID", "variant": ""},
             "timezone": "Asia/Jakarta",
-            "extra": {
-                "fingerprint": "waydroid/lineage_waydroid_x86_64/waydroid_x86_64:13/TQ3A.230901.001/eng.aleast.20260403.113748:userdebug/test-keys",
-                "tags": "test-keys", "type": "userdebug", "user": "aleasto", "host": "zero"
-            },
-            "masking_detected": True,
-            "masking_evidence": {}
+            "extra": self.profile["extra"]
         }
 
     def log(self, message):
@@ -190,7 +187,7 @@ class SeoFastBot:
                 self.hash_ajax = match.group(1)
                 self.log(f"[+] Hash Ajax terbaru: {self.hash_ajax}")
                 # Update base headers for future JSON requests
-                self.headers['Content-Type'] = "application/json"
+                self.headers['Content-Type'] = "application/json; charset=utf-8"
                 return True
         except: pass
         return False
@@ -267,12 +264,13 @@ class SeoFastBot:
             "hash_ajax": self.hash_ajax,
             "id_device": self.id_device,
             "email": self.gmail,
-            "os_version": "13",
-            "screen_resolution": "1920x965",
-            "locale_language": "en",
-            "locale_country": "US",
+            "os_version": self.profile["os_version"],
+            "screen_resolution": self.profile["screen_resolution"],
+            "locale_language": "in",
+            "locale_country": "ID",
             "data_json": json.dumps(device_info)
         }
+
         
         try:
             res = self.request('post', url, json=payload, headers=self.headers)
@@ -290,7 +288,7 @@ class SeoFastBot:
         if not self.login():
             return "RESTART"
             
-        # Kirim update data sekali di awal
+        # Kirim update data SEBELUM mengambil tugas pertama
         self.update_data()
         
         while True:
@@ -314,9 +312,18 @@ class SeoFastBot:
                 self.log("[*] Menunggu 30 detik sebelum mencoba lagi...")
                 time.sleep(30)
 
+proxy_lock = threading.Lock()
+global_proxy_index = 0
+
 def worker(email, password, device_index, proxy_list):
+    global global_proxy_index
     while True:
-        current_proxy = random.choice(proxy_list) if proxy_list else None
+        current_proxy = None
+        if proxy_list:
+            with proxy_lock:
+                current_proxy = proxy_list[global_proxy_index % len(proxy_list)]
+                global_proxy_index += 1
+
         if current_proxy and not current_proxy.startswith("http"):
             current_proxy = f"http://{current_proxy}"
             
@@ -324,7 +331,7 @@ def worker(email, password, device_index, proxy_list):
         res = bot.run()
         
         if res == "RESTART":
-            time.sleep(2)
+            time.sleep(random.randrange(60, 90))
             continue
         break
 
@@ -379,17 +386,24 @@ if __name__ == "__main__":
     if not main_email or not main_password:
         print(f"[-] Gagal membaca email/pass dari {acc_file}")
         sys.exit(1)
-        
+    random.shuffle(proxy_list)
     print(f"[+] Login sebagai: {main_email}")
     print(f"[+] Ditemukan {len(proxy_list)} proxy.")
+    
+    max_devices = len(DEVICE_PROFILES)
+    print(f"[+] Profil perangkat tersedia: {max_devices}")
         
     try:
-        num_devices = int(input("[?] Jumlah Device (Thread): ").strip())
+        num_devices = int(input(f"[?] Jumlah Device (Thread) [Maksimal {max_devices}]: ").strip())
+        if num_devices > max_devices:
+            print(f"[-] Jumlah melebihi maksimal perangkat ({max_devices}). Menggunakan {max_devices} device.")
+            num_devices = max_devices
     except ValueError:
         print("[-] Jumlah device harus angka.")
         sys.exit(1)
 
     threads = []
+    random.shuffle(proxy_list)
     for i in range(1, num_devices + 1):
         t = threading.Thread(target=worker, args=(main_email, main_password, i, proxy_list))
         t.daemon = True
