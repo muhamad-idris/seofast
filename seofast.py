@@ -205,6 +205,15 @@ class SeoFastBot:
                 data = res.json()
                 if data.get("status"):
                     return data
+                elif "через" in data.get("mess", ""):
+                    match = re.search(r'через\s+(\d{2}):(\d{2})', data.get("mess", ""))
+                    if match:
+                        m, s = int(match.group(1)), int(match.group(2))
+                        wait_seconds = m * 60 + s
+                        self.log(f"[*] Harus menunggu {m:02d}:{s:02d} ({wait_seconds} detik) untuk tugas baru...")
+                        return {"wait": wait_seconds + 2}
+                    self.log(f"[!] Tidak ada tugas tersedia atau error: {res.text}")
+                    return "RESTART"
                 else:
                     self.log(f"[!] Tidak ada tugas tersedia atau error: {res.text}")
                     return "RESTART"
@@ -296,6 +305,11 @@ class SeoFastBot:
             if task == "RESTART":
                 self.log("[*] Tidak ada tugas, meregenerasi device dan mengganti proxy...")
                 return "RESTART"
+            elif isinstance(task, dict) and "wait" in task:
+                wait_sec = task["wait"]
+                self.log(f"[*] Menjalankan timer tunggu selama {wait_sec} detik...")
+                time.sleep(wait_sec)
+                continue
             elif task:
                 id_status = task.get("id_status")
                 timer = int(task.get("timer", 15))
