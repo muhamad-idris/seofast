@@ -38,7 +38,7 @@ def get_student_email(device_index):
     global student_emails
     if not student_emails:
         try:
-            with open("/home/idris/seofast/daftar_id_belajar_siswa.csv", "r", encoding="utf-8") as f:
+            with open("daftar_id_belajar_siswa.csv", "r", encoding="utf-8") as f:
                 reader = csv.reader(f)
                 next(reader, None) # Skip header
                 for row in reader:
