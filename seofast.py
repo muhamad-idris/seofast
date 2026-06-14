@@ -1,3 +1,4 @@
+from random import random
 import warnings
 import requests
 import json
@@ -8,6 +9,7 @@ import threading
 import sys
 import os
 import re
+import csv
 from datetime import datetime
 
 # Disable insecure request warnings
@@ -29,10 +31,30 @@ RUSSIAN_NAMES = [
 
 from devices import DEVICE_PROFILES
 
-def generate_russian_email():
-    name = random.choice(RUSSIAN_NAMES)
-    suffix = random.choice(["", str(random.randint(70, 99)), str(random.randint(1980, 2005)), str(random.randint(1, 999))])
-    return f"{name}{suffix}@gmail.com"
+# Variabel global untuk cache email siswa
+student_emails = []
+
+def get_student_email(device_index):
+    global student_emails
+    if not student_emails:
+        try:
+            with open("/home/idris/seofast/daftar_id_belajar_siswa.csv", "r", encoding="utf-8") as f:
+                reader = csv.reader(f)
+                next(reader, None) # Skip header
+                for row in reader:
+                    if len(row) >= 3:
+                        email = row[2].strip()
+                        if email:
+                            student_emails.append(email)
+        except Exception as e:
+            print(f"[!] Gagal membaca CSV akun belajar: {e}")
+            student_emails.append("default.student@smk.belajar.id")
+            
+    if not student_emails:
+        student_emails.append("default.student@smk.belajar.id")
+        
+    # Memilih email secara konsisten berdasarkan device_index
+    return student_emails[device_index % len(student_emails)]
 
 def wait_for_internet(device_index=None):
     global is_offline
@@ -61,13 +83,20 @@ class SeoFastBot:
         self.device_index = device_index
         
         # Patenkan data unik berdasarkan email akun dan index device
-        seed_string = f"{self.email}_{self.device_index}"
+        
+        self.gmail = get_student_email(self.device_index)
+        if '@' in self.gmail:
+            username, domain = self.gmail.split('@', 1)
+        else:
+            username, domain = self.gmail, "gmail.com"
+            
+        if len(username) > 1:
+            self.masked_gmail = f"{username[0]}***{username[-1]}@{domain}"
+        else:
+            self.masked_gmail = f"{username}***@{domain}"
+        
+        seed_string = f"{self.gmail}{self.email}_{self.device_index}"
         random.seed(seed_string)
-        
-        self.gmail = generate_russian_email()
-        username = self.gmail.split('@')[0]
-        self.masked_gmail = f"{username[0]}***{username[-1]}@gmail.com"
-        
         self.profile = DEVICE_PROFILES[(self.device_index - 1) % len(DEVICE_PROFILES)]
         self.id_device = "secure_" + hashlib.md5(seed_string.encode()).hexdigest()[:16]
         
@@ -205,15 +234,15 @@ class SeoFastBot:
                 data = res.json()
                 if data.get("status"):
                     return data
-                elif "через" in data.get("mess", ""):
-                    match = re.search(r'через\s+(\d{2}):(\d{2})', data.get("mess", ""))
-                    if match:
-                        m, s = int(match.group(1)), int(match.group(2))
-                        wait_seconds = m * 60 + s
-                        self.log(f"[*] Harus menunggu {m:02d}:{s:02d} ({wait_seconds} detik) untuk tugas baru...")
-                        return {"wait": wait_seconds + 2}
-                    self.log(f"[!] Tidak ada tugas tersedia atau error: {res.text}")
-                    return "RESTART"
+                # elif "через" in data.get("mess", ""):
+                #     match = re.search(r'через\s+(\d{2}):(\d{2})', data.get("mess", ""))
+                #     if match:
+                #         m, s = int(match.group(1)), int(match.group(2))
+                #         wait_seconds = m * 60 + s
+                #         self.log(f"[*] Harus menunggu {m:02d}:{s:02d} ({wait_seconds} detik) untuk tugas baru...")
+                #         return {"wait": wait_seconds + 2}
+                #     self.log(f"[!] Tidak ada tugas tersedia atau error: {res.text}")
+                #     return "RESTART"
                 else:
                     self.log(f"[!] Tidak ada tugas tersedia atau error: {res.text}")
                     return "RESTART"
