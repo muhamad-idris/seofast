@@ -54,7 +54,7 @@ def get_student_email(device_index):
         student_emails.append("default.student@smk.belajar.id")
         
     # Memilih email secara konsisten berdasarkan device_index
-    return student_emails[device_index % len(student_emails)]
+    return random.choice(student_emails)
 
 def wait_for_internet(device_index=None):
     global is_offline
@@ -97,6 +97,7 @@ class SeoFastBot:
         
         seed_string = f"{self.gmail}{self.email}_{self.device_index}"
         random.seed(seed_string)
+        print("google :",self.gmail)
         self.profile = DEVICE_PROFILES[(self.device_index - 1) % len(DEVICE_PROFILES)]
         self.id_device = "secure_" + hashlib.md5(seed_string.encode()).hexdigest()[:16]
         
